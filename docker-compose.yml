@@ -4,7 +4,7 @@ include:
 volumes:
   n8n_storage:
   ollama_storage:
-  qdrant_storage:
+#  qdrant_storage:
   open-webui:
   flowise:
   caddy-data:
@@ -14,20 +14,44 @@ volumes:
   langfuse_clickhouse_data:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
+  portainer_data:
+
+  n8n-backup:
+  n8n-shared:
+#  n8n-fiches:   # still declared here even if it stays a bind mount
+  neo4j-logs:
+  neo4j-config:
+  neo4j-data:
+  neo4j-plugins:
+  searxng-config:
 
 x-n8n: &service-n8n
-  image: n8nio/n8n:latest
+  image: n8nio/n8n:2.2.3
   environment:
     - DB_TYPE=postgresdb
-    - DB_POSTGRESDB_HOST=db
-    - DB_POSTGRESDB_USER=postgres
-    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
-    - DB_POSTGRESDB_DATABASE=postgres
+    - DB_POSTGRESDB_HOST=supabase-db
+    - DB_POSTGRESDB_PORT=5432
+    - DB_POSTGRESDB_USER=n8n_user
+    - DB_POSTGRESDB_PASSWORD=WOuLSMXH#rXu4G
+    - DB_POSTGRESDB_DATABASE=n8n_db
     - N8N_DIAGNOSTICS_ENABLED=false
     - N8N_PERSONALIZATION_ENABLED=false
     - N8N_ENCRYPTION_KEY
     - N8N_USER_MANAGEMENT_JWT_SECRET
     - WEBHOOK_URL=${N8N_HOSTNAME:+https://}${N8N_HOSTNAME:-http://localhost:5678}
+    - N8N_FEATURE_FLAGS=communityNodes
+    - N8N_ALLOW_LOAD_NODES_FROM_NPM=true
+    - GENERIC_TIMEZONE=Europe/Paris
+    - N8N_PROTOCOL=https
+    - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    - NODES_EXCLUDE="[]"
+    - N8N_RESTRICT_FILE_ACCESS_TO=/home/node/.n8n-files;/files/fiches
+    # NEW: Task runners (external mode)
+    - N8N_RUNNERS_ENABLED=true
+    - N8N_RUNNERS_MODE=external
+    - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+    - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+
 
 x-ollama: &service-ollama
   image: ollama/ollama:latest
@@ -57,6 +81,7 @@ services:
   flowise:
     image: flowiseai/flowise
     restart: unless-stopped
+    profiles: ["optional"]
     container_name: flowise
     expose:
       - 3001/tcp
@@ -71,8 +96,9 @@ services:
     entrypoint: /bin/sh -c "sleep 3; flowise start"
 
   open-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:0.6.43
     restart: unless-stopped
+#    profiles: ["optional"]
     container_name: open-webui
     expose:
       - 8080/tcp
@@ -80,6 +106,34 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - open-webui:/app/backend/data
+
+  finance_backend:
+    build:
+      context: ./Finance_dashboard/backend
+      dockerfile: Dockerfile
+      args:
+        PYTHON_ENV: production
+    environment:
+      - DATABASE_URL=postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/_supabase
+      - SECRET_KEY=${FINANCE_SECRET_KEY}
+      - APP_PASSWORD=${FINANCE_APP_PASSWORD}
+#    depends_on:
+#      - db
+    depends_on:
+      db:
+        condition: service_healthy
+#    volumes:
+#      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
+
+  finance_frontend:
+    build:
+      context: ./Finance_dashboard/frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+        REACT_APP_API_URL: https://finance.chezgilles.ovh
+    depends_on:
+      - finance_backend
 
   n8n-import:
     <<: *service-n8n
@@ -91,62 +145,177 @@ services:
     volumes:
       - ./n8n/backup:/backup
 
+
   n8n:
     <<: *service-n8n
     container_name: n8n
     restart: unless-stopped
     expose:
       - 5678/tcp
+      - 5679/tcp  # NEW: Task broker port
     volumes:
       - n8n_storage:/home/node/.n8n
-      - ./n8n/backup:/backup
-      - ./shared:/data/shared
+      #- ./n8n/backup:/backup
+      #- ./shared:/data/shared
+      - /home/gilles/local-ai-packaged/n8n/fiches:/files/fiches
+      - n8n-backup:/backup
+      - n8n-shared:/data/shared
+#    extra_hosts:
+#      - "host.docker.internal:host-gateway"
+
     depends_on:
       n8n-import:
         condition: service_completed_successfully
+      db:
+        condition: service_healthy
 
-  qdrant:
-    image: qdrant/qdrant
-    container_name: qdrant
+  # NEW: Task runner service
+  n8n-task-runner:
+    image: n8nio/runners:2.2.3
+    container_name: n8n-task-runner
     restart: unless-stopped
-    expose:
-      - 6333/tcp
-      - 6334/tcp
+    environment:
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
     volumes:
-      - qdrant_storage:/qdrant/storage
+      - n8n_storage:/home/node/.n8n
+    depends_on:
+      n8n:
+        condition: service_healthy
+
+ # qdrant:
+ #   image: qdrant/qdrant
+ #   container_name: qdrant
+ #   restart: unless-stopped
+ #   expose:
+ #     - 6333/tcp
+ #     - 6334/tcp
+ #   volumes:
+ #     - qdrant_storage:/qdrant/storage
 
   neo4j:
-    image: neo4j:latest
+    image: neo4j@sha256:cab98be4bb9ab340885a97f10bab54cf01f931acc63be5bac890304dd13ddec9
     volumes:
-        - ./neo4j/logs:/logs
-        - ./neo4j/config:/config
-        - ./neo4j/data:/data
-        - ./neo4j/plugins:/plugins
-    expose:
-      - 7473/tcp
-      - 7474/tcp
-      - 7687/tcp
+      - neo4j-logs:/logs
+      - neo4j-config:/config
+      - neo4j-data:/data
+      - neo4j-plugins:/plugins
+      - /opt/neo4j-certs:/ssl/bolt:ro
     environment:
-        - NEO4J_AUTH=${NEO4J_AUTH:-"neo4j/your_password"}
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-demodemo}
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=1G
+      - NEO4J_server_memory_pagecache_size=512m
+      
+      # Bolt with SSL enabled
+      - NEO4J_server_bolt_listen__address=:7687
+      - NEO4J_server_bolt_advertised__address=neo4j.chezgilles.ovh:7687
+      - NEO4J_server_bolt_tls__level=OPTIONAL
+      
+      # SSL policy for Bolt
+      - NEO4J_dbms_ssl_policy_bolt_enabled=true
+      - NEO4J_dbms_ssl_policy_bolt_base__directory=/ssl/bolt
+      - NEO4J_dbms_ssl_policy_bolt_private__key=privkey.pem
+      - NEO4J_dbms_ssl_policy_bolt_public__certificate=fullchain.pem
+      
+      # HTTP interface
+      - NEO4J_server_http_listen__address=:7474
+      - NEO4J_server_https_enabled=false
+      
+      # APOC plugin configuration
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_refactor_enabled=true
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+    ports:
+      - "7687:7687"  # Expose Bolt port
+    expose:
+      - 7474/tcp
+    healthcheck:
+      test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: always
+
+########################### new from Graphiti MCP
+  # neo4j:
+  #   image: neo4j:5.26.0
+  #   ports:
+  #     - "7474:7474" # HTTP
+  #     - "7687:7687" # Bolt
+  #   environment:
+  #     - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-demodemo}
+  #     - NEO4J_server_memory_heap_initial__size=512m
+  #     - NEO4J_server_memory_heap_max__size=1G
+  #     - NEO4J_server_memory_pagecache_size=512m
+  #   volumes:
+  #     - neo4j_data:/data
+  #     - neo4j_logs:/logs
+  #   healthcheck:
+  #     test: ["CMD", "wget", "-O", "/dev/null", "http://localhost:7474"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+
+  graphiti-mcp:
+    image: zepai/knowledge-graph-mcp:latest
+    build:
+      context: .
+      dockerfile: /home/gilles/local-ai-packaged/graphiti/mcp_server/Dockerfile
+    env_file:
+      - path: .env
+        required: false # Makes the file optional. Default value is 'true'
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+      - NEO4J_USER=${NEO4J_USER:-neo4j}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-demodemo}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - MODEL_NAME=${MODEL_NAME}
+      - PATH=/root/.local/bin:${PATH}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
+    ports:
+      - "127.0.0.1:8030:8000"
+#      - "8030:8000" # Expose the MCP server via HTTP for SSE transport
+    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse", "--database-provider", "neo4j"]
+
+# volumes:
+#   neo4j_data:
+#   neo4j_logs:
+##########################################################""
+
+
 
   caddy:
     container_name: caddy
-    image: docker.io/library/caddy:2-alpine
+    image: caddy-ovh
+#    image: docker.io/library/caddy:2-alpine
     restart: unless-stopped
     ports:
       - 80:80/tcp
       - 443:443/tcp
-    expose:
-      - 2019/tcp
-      - 443/tcp
-      - 443/udp
-      - 80/tcp
+#    expose:
+#      - 2019/tcp
+#      - 443/tcp
+#      - 443/udp
+#      - 80/tcp
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-addon:/etc/caddy/addons:ro
       - caddy-data:/data:rw
       - caddy-config:/config:rw
+      - ./ovh.env:/etc/caddy/ovh.env:ro
+    env_file:
+      -  ./ovh.env
+#    networks:
+#      - caddy_net
     environment:
       - N8N_HOSTNAME=${N8N_HOSTNAME:-":8001"}
       - WEBUI_HOSTNAME=${WEBUI_HOSTNAME:-":8002"}
@@ -166,10 +335,27 @@ services:
       options:
         max-size: "1m"
         max-file: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+
+  portainer:
+    image: portainer/portainer-ce@sha256:f4c59b58fd64499295e59b1665bbd9af0cf9e823258f84859510db3263718142
+    container_name: portainer
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+#    networks:
+#      - caddy_net
 
   langfuse-worker:
     image: langfuse/langfuse-worker:3
-    restart: always
+    restart: Always
+    profiles: ["optional"]
     depends_on: &langfuse-depends-on
       postgres:
         condition: service_healthy
@@ -227,7 +413,8 @@ services:
 
   langfuse-web:
     image: langfuse/langfuse:3
-    restart: always
+    restart: Always
+    profiles: ["optional"]
     depends_on: *langfuse-depends-on
     expose:
       - 3000/tcp
@@ -248,6 +435,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server
     restart: always
+    profiles: ["optional"]
     user: "101:101"
     expose:
       - 8123/tcp
@@ -334,11 +522,13 @@ services:
   searxng:
     container_name: searxng
     image: docker.io/searxng/searxng:latest
+    profiles: ["optional"]
     restart: unless-stopped
     expose:
       - 8080/tcp
     volumes:
-      - ./searxng:/etc/searxng:rw
+    #  - ./searxng:/etc/searxng:rw
+      - searxng-config:/etc/searxng:rw
     environment:
       - SEARXNG_BASE_URL=https://${SEARXNG_HOSTNAME:-localhost}/
       - UWSGI_WORKERS=${SEARXNG_UWSGI_WORKERS:-4}
@@ -396,3 +586,7 @@ services:
     image: ollama/ollama:rocm
     depends_on:
      - ollama-gpu-amd
+
+#networks:
+#  caddy_net:
+#    external: true  # This tells compose the network already exists
