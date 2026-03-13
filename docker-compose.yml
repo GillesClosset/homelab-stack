@@ -284,6 +284,8 @@ services:
     ports:
       - "127.0.0.1:8030:8000"
 #      - "8030:8000" # Expose the MCP server via HTTP for SSE transport
+    volumes:
+      - ./graphiti-mcp-config.neo4j.yaml:/app/mcp/config/config.yaml:ro
     command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse", "--database-provider", "neo4j"]
 
 # volumes:
