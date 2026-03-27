@@ -263,6 +263,7 @@ services:
   #     start_period: 30s
 
   graphiti-mcp:
+    profiles: ["graphiti"]
     image: zepai/knowledge-graph-mcp:latest
     build:
       context: .
