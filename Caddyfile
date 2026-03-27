@@ -1,7 +1,21 @@
 {
     # Global options - works for both environments
-    email {$LETSENCRYPT_EMAIL}
+    email gilles.closset@gmail.com
 }
+
+*.chezgilles.ovh, chezgilles.ovh {
+    tls {
+        dns ovh
+    }
+}
+
+#  {
+ #   endpoint {$OVH_ENDPOINT}
+#    application_key {$OVH_APPLICATION_KEY}
+ #   application_secret {$OVH_APPLICATION_SECRET}
+  #  consumer_key {$OVH_CONSUMER_KEY}
+#  }
+#}
 
 # N8N
 {$N8N_HOSTNAME} {
@@ -35,12 +49,73 @@
     reverse_proxy kong:8000
 }
 
-# Neo4j
-{$NEO4J_HOSTNAME} {
-    reverse_proxy neo4j:7474
+# # Serve Neo4j Browser over HTTP (no auto-HTTPS)
+# http://neo4j.chezgilles.ovh {
+#     reverse_proxy neo4j:7474
+# }
+
+# Or keep your existing domain but force HTTP
+# http://{$NEO4J_HOSTNAME} {
+#     reverse_proxy neo4j:7474
+# }
+ {$NEO4J_HOSTNAME} {
+     reverse_proxy neo4j:7474
+ }
+import /etc/caddy/addons/*.conf
+
+# Portainer
+portainer.chezgilles.ovh {
+    reverse_proxy portainer:9000
 }
 
-import /etc/caddy/addons/*.conf
+#Openclaw
+openclaw.chezgilles.ovh {
+    basic_auth {
+        gilles $2a$14$XRg8C2GP3feld9DcCOpXGOKmOxy/sfXw7PHG7ZvhIkYylBQA6MUWG
+    }
+    reverse_proxy 172.18.0.1:18789
+}
+
+# OpenCode
+opencode.chezgilles.ovh {
+    reverse_proxy unix//run/opencode/opencode.sock
+}
+
+# Finance Dashboard
+finance.chezgilles.ovh {
+    # Proxy API requests to backend
+    reverse_proxy /api/* finance_backend:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Proxy auth requests to backend
+    reverse_proxy /auth/* finance_backend:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Proxy Open WebUI so it can be framed without mixed-content
+    # Use handle_path to strip the /open-webui prefix so the backend sees
+    # requests at its root (/) which Open WebUI expects.
+    handle_path /open-webui* {
+        reverse_proxy open-webui:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Everything else goes to frontend (nginx serving React build)
+    reverse_proxy finance_frontend:80
+}
+
+
 
 # # SearXNG
 # {$SEARXNG_HOSTNAME} {

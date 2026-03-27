@@ -200,7 +200,7 @@ services:
       - neo4j-config:/config
       - neo4j-data:/data
       - neo4j-plugins:/plugins
-      - /opt/neo4j-certs:/ssl/bolt:ro
+      - ./neo4j-certs:/ssl/bolt:ro
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-demodemo}
       - NEO4J_server_memory_heap_initial__size=512m
@@ -311,6 +311,7 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy-addon:/etc/caddy/addons:ro
+      - ./opencode-run:/run/opencode
       - caddy-data:/data:rw
       - caddy-config:/config:rw
       - ./ovh.env:/etc/caddy/ovh.env:ro
