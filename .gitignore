@@ -2,6 +2,9 @@
 volumes/
 shared/
 neo4j/
+!/scripts/
+!/scripts/neo4j/
+!/scripts/neo4j/cutover-default-kg-dataset.sh
 shared-backup/
 .env.test
 searxng/settings.yml
