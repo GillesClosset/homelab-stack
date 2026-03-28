@@ -99,17 +99,10 @@ finance.chezgilles.ovh {
         header_up X-Forwarded-Proto {scheme}
     }
 
-    # Proxy Open WebUI so it can be framed without mixed-content
-    # Use handle_path to strip the /open-webui prefix so the backend sees
-    # requests at its root (/) which Open WebUI expects.
-    handle_path /open-webui* {
-        reverse_proxy open-webui:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote}
-            header_up X-Forwarded-For {remote}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
+    # Legacy assistant path: Open WebUI was removed from the runtime.
+    # Redirect old finance links to the native assistant route.
+    redir /open-webui /assistant 308
+    redir /open-webui/* /assistant 308
 
     # Everything else goes to frontend (nginx serving React build)
     reverse_proxy finance_frontend:80
