@@ -26,7 +26,7 @@ volumes:
   searxng-config:
 
 x-n8n: &service-n8n
-  image: n8nio/n8n:2.2.3
+  image: n8nio/n8n:2.13.4
   environment:
     - DB_TYPE=postgresdb
     - DB_POSTGRESDB_HOST=supabase-db
@@ -95,19 +95,8 @@ services:
         - ~/.flowise:/root/.flowise
     entrypoint: /bin/sh -c "sleep 3; flowise start"
 
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:0.6.43
-    restart: unless-stopped
-#    profiles: ["optional"]
-    container_name: open-webui
-    expose:
-      - 8080/tcp
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - open-webui:/app/backend/data
-
   finance_backend:
+    restart: unless-stopped
     build:
       context: ./Finance_dashboard/backend
       dockerfile: Dockerfile
@@ -126,6 +115,7 @@ services:
 #      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
 
   finance_frontend:
+    restart: unless-stopped
     build:
       context: ./Finance_dashboard/frontend
       dockerfile: Dockerfile
@@ -171,7 +161,7 @@ services:
 
   # NEW: Task runner service
   n8n-task-runner:
-    image: n8nio/runners:2.2.3
+    image: n8nio/runners:2.13.4
     container_name: n8n-task-runner
     restart: unless-stopped
     environment:
@@ -181,7 +171,7 @@ services:
       - n8n_storage:/home/node/.n8n
     depends_on:
       n8n:
-        condition: service_healthy
+        condition: service_started
 
  # qdrant:
  #   image: qdrant/qdrant
@@ -262,33 +252,6 @@ services:
   #     retries: 5
   #     start_period: 30s
 
-  graphiti-mcp:
-    profiles: ["graphiti"]
-    image: zepai/knowledge-graph-mcp:latest
-    build:
-      context: .
-      dockerfile: /home/gilles/local-ai-packaged/graphiti/mcp_server/Dockerfile
-    env_file:
-      - path: .env
-        required: false # Makes the file optional. Default value is 'true'
-    depends_on:
-      neo4j:
-        condition: service_healthy
-    environment:
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-demodemo}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MODEL_NAME=${MODEL_NAME}
-      - PATH=/root/.local/bin:${PATH}
-      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-10}
-    ports:
-      - "127.0.0.1:8030:8000"
-#      - "8030:8000" # Expose the MCP server via HTTP for SSE transport
-    volumes:
-      - ./graphiti-mcp-config.neo4j.yaml:/app/mcp/config/config.yaml:ro
-    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse", "--database-provider", "neo4j"]
-
 # volumes:
 #   neo4j_data:
 #   neo4j_logs:
@@ -344,7 +307,7 @@ services:
 
 
   portainer:
-    image: portainer/portainer-ce@sha256:f4c59b58fd64499295e59b1665bbd9af0cf9e823258f84859510db3263718142
+    image: portainer/portainer-ce:2.39.1
     container_name: portainer
     restart: always
     ports:
@@ -359,7 +322,7 @@ services:
   langfuse-worker:
     image: langfuse/langfuse-worker:3
     restart: Always
-    profiles: ["optional"]
+    profiles: ["disabled"]
     depends_on: &langfuse-depends-on
       postgres:
         condition: service_healthy
@@ -418,7 +381,7 @@ services:
   langfuse-web:
     image: langfuse/langfuse:3
     restart: Always
-    profiles: ["optional"]
+    profiles: ["disabled"]
     depends_on: *langfuse-depends-on
     expose:
       - 3000/tcp
@@ -439,7 +402,7 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server
     restart: always
-    profiles: ["optional"]
+    profiles: ["disabled"]
     user: "101:101"
     expose:
       - 8123/tcp
@@ -462,6 +425,7 @@ services:
   minio:
     image: minio/minio
     restart: always
+    profiles: ["disabled"]
     entrypoint: sh
     # create the 'langfuse' bucket before starting the service
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
@@ -483,6 +447,7 @@ services:
   postgres:
     image: postgres:${POSTGRES_VERSION:-latest}
     restart: unless-stopped
+    profiles: ["disabled"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 3s

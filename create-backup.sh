@@ -28,7 +28,7 @@ cp supabase/.env "$BACKUP_DIR/supabase.env.backup" 2>/dev/null || echo "No supab
 
 # Export current volumes to tarballs
 echo "Exporting named volumes..."
-for volume in $(docker volume ls --format "{{.Name}}" | grep -E "(n8n_storage|ollama_storage|open-webui|flowise|caddy-data|caddy-config|valkey-data|langfuse_|portainer_data)"); do
+for volume in $(docker volume ls --format "{{.Name}}" | grep -E "(n8n_storage|ollama_storage|flowise|caddy-data|caddy-config|valkey-data|langfuse_|portainer_data)"); do
     echo "Exporting volume: $volume"
     docker run --rm -v "$volume:/data" -v "$PWD/$BACKUP_DIR:/backup" alpine tar czf "/backup/volume-$volume.tar.gz" -C /data .
 done

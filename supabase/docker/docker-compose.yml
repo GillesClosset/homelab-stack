@@ -313,6 +313,7 @@ services:
     container_name: supabase-edge-functions
     image: supabase/edge-runtime:v1.67.4
     restart: unless-stopped
+    profiles: ["disabled"]
     volumes:
       - ./volumes/functions:/home/deno/functions:Z
 #    depends_on:
