@@ -108,6 +108,9 @@ services:
       - APP_PASSWORD=${FINANCE_APP_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - GITHUB_API_KEY=${GITHUB_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ASSISTANT_BASE_URL=${ASSISTANT_BASE_URL}
       - COHERE_API_KEY=${COHERE_API_KEY}
       - ASSISTANT_ENABLED=${ASSISTANT_ENABLED:-true}
       - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-github}
@@ -126,8 +129,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
-#    volumes:
+    volumes:
 #      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
+      - /home/gilles/wealth_scraper:/wealth_scraper
 
   finance_frontend:
     restart: unless-stopped
