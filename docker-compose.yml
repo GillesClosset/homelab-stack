@@ -112,6 +112,8 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - ASSISTANT_BASE_URL=${ASSISTANT_BASE_URL}
       - COHERE_API_KEY=${COHERE_API_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
       - ASSISTANT_ENABLED=${ASSISTANT_ENABLED:-true}
       - ASSISTANT_PROVIDER=${ASSISTANT_PROVIDER:-github}
       - ASSISTANT_AUTH_MODE=${ASSISTANT_AUTH_MODE:-api_key}
@@ -132,6 +134,8 @@ services:
     volumes:
 #      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
       - /home/gilles/wealth_scraper:/wealth_scraper
+      - ./n8n/fiches:/fiches                           # profile read/write + kg_ingest corpus
+      - ./shared:/data/shared                          # n8n watch folder for RAG ingestion
 
   finance_frontend:
     restart: unless-stopped
