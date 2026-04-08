@@ -168,3 +168,8 @@ finance.chezgilles.ovh {
 #         header_up Connection "close"
 #     }
 # }
+
+# BoardgameBeats dashboard
+#boardgamebeats.chezgilles.ovh {
+#    reverse_proxy boardgamebeats-dashboard:8000
+#}
