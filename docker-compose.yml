@@ -122,6 +122,8 @@ services:
       - ASSISTANT_GRAPH_RESULT_LIMIT=${ASSISTANT_GRAPH_RESULT_LIMIT:-8}
       - ASSISTANT_DOCUMENT_SEARCH_LIMIT=${ASSISTANT_DOCUMENT_SEARCH_LIMIT:-8}
       - ASSISTANT_DOCUMENT_EXCERPT_CHARS=${ASSISTANT_DOCUMENT_EXCERPT_CHARS:-4000}
+      - PROFILE_DATA_DIR=/app/data
+      - FICHES_ROOT=/app/data/fiches
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USERNAME=${NEO4J_USERNAME:-${NEO4J_USER:-neo4j}}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
@@ -134,8 +136,8 @@ services:
     volumes:
 #      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
       - /home/gilles/wealth_scraper:/wealth_scraper
-      - ./n8n/fiches:/fiches                           # profile read/write + kg_ingest corpus
-      - ./shared:/data/shared                          # n8n watch folder for RAG ingestion
+      - ./Finance_dashboard/backend/data:/app/data     # user profile (summary + full) + other data files
+      - ./shared:/data/shared                          # shared folder for RAG ingestion
 
   finance_frontend:
     restart: unless-stopped
