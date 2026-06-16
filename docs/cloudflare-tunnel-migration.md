@@ -14,6 +14,38 @@ You can stop after Phase 3 and finish later — the site keeps working the whole
 
 ---
 
+## ✅ Completed — final state (2026-06-16)
+
+The migration is **done and live**. Final state, beyond the original goal:
+
+- **Nameservers** moved OVH → Cloudflare (`lamar`/`sofia.ns.cloudflare.com`). Mail
+  records kept DNS-only; Cloudflare Email Routing was disabled (it had hijacked MX).
+- **Wildcard cert** (`*.chezgilles.ovh`) renews via Cloudflare **DNS-01**
+  (`caddy-dns/cloudflare` plugin, token in `cloudflare.env`).
+- **hermes** + **openclaw** behind **Cloudflare Tunnel `hermes-vps`** + Access.
+  Both services rebound to loopback; Caddy basic_auth + ufw rules removed.
+- **Access auth = Google OAuth only.** The email OTP IdP was deleted. Policy:
+  allow `gilles.closset@gmail.com`, require Google, `mfa_disabled: true`
+  (Access apps: hermes, openclaw, finance share the reusable "main email policy").
+- **finance.chezgilles.ovh** is now ALSO behind Access (whole domain). It is the
+  only **proxied** (orange-cloud) host → its DNS record is `A 135.125.106.210`
+  proxied, zone SSL/TLS mode **Full**. The finance app's own login was **removed**
+  (relies on Access); see the finance repo + the origin-lock note in Phase 7.
+- **Docker iptables-bypass hardening:** ports that Docker had published to
+  `0.0.0.0` (bypassing UFW) were rebound to `127.0.0.1`: neo4j Bolt 7687,
+  portainer 9000/9443, supabase kong 8000/8443, supabase pooler 5432/6543.
+- **coolify.chezgilles.ovh** `A 217.182.66.124` (DNS-only) points at the *other*
+  VPS; `boardgamebeats.ovh` was released. Coolify keeps its own Traefik cert +
+  login (not behind Access).
+
+Useful IDs (Cloudflare): account `914ab3d9b12de910ebddc3f40451d992`, team
+`square-cherry-4288.cloudflareaccess.com`, tunnel `hermes-vps`
+`d4dfd161-443e-446c-97d4-c84d6e064316`, reusable policy
+`a702ae14-aded-482f-8c05-3507ba765a39`, Google IdP
+`c90106bb-e955-46a7-8441-232fa37bddfd`.
+
+---
+
 ## Current state (inventory taken 2026-06-12)
 
 - **Registrar/DNS today:** OVH — nameservers `dns10.ovh.net` / `ns10.ovh.net`
@@ -145,47 +177,67 @@ Phase 3, Caddy will automatically renew via Cloudflare DNS-01 on the next cycle.
 - [ ] Run it as a service: `sudo cloudflared service install` then
       `sudo systemctl enable --now cloudflared`.
 
-## Phase 6 — Cloudflare Access policies (the actual security)
+## Phase 6 — Cloudflare Access policies (the actual security) ✅ DONE
 
-- [ ] Cloudflare dashboard → **Zero Trust** → first-time setup (pick a team name;
-      Free plan, up to 50 users).
-- [ ] **Settings → Authentication →** add a login method: **Google** (one-click) and/or
-      **One-time PIN** (email code, no setup). Optionally enforce MFA.
-- [ ] **Access → Applications → Add application → Self-hosted:**
-  - Application domain: `hermes.chezgilles.ovh`
-  - Policy: **Allow**, Include → **Emails** → `gilles.closset@gmail.com`
-  - (Optional) Require → **Authentication method / MFA**.
-- [ ] Repeat for `openclaw.chezgilles.ovh`.
-- [ ] **Test:** open `https://hermes.chezgilles.ovh` in a browser → Cloudflare Access
-      login → after auth → the dashboard. Try a private window on your phone too.
+As implemented:
+- **Zero Trust** team `square-cherry-4288.cloudflareaccess.com`.
+- **Authentication = Google OAuth only.** The One-Time-PIN IdP was deleted, so the
+  email-code path no longer appears. (Beware: a policy with `mfa_disabled: false`
+  but no second factor configured fails with "No authentication methods set up" —
+  the policies use `mfa_disabled: true`.)
+- **Access applications** (self-hosted): `hermes.chezgilles.ovh`,
+  `openclaw.chezgilles.ovh`, `finance.chezgilles.ovh` — all share one reusable
+  policy: **Allow**, Include → email `gilles.closset@gmail.com`, Require → Google
+  login method, `mfa_disabled: true`.
+- **Test:** open each URL in a browser → Access (Google) → service. A private
+  window / phone shows the Access gate; an already-signed-in Google session
+  passes through silently.
 
-## Phase 7 — Lock down the now-private services (optional hardening, do once it works)
+## Phase 7 — Lock down the now-private services ✅ DONE
 
-Now that traffic only arrives via the tunnel (localhost), you can shrink the surface:
+Traffic for hermes/openclaw arrives only via the tunnel (localhost), so the
+surface was shrunk:
 
-- [ ] **hermes:** edit `/etc/systemd/system/hermes-dashboard.service` →
-      change `--host 0.0.0.0 --port 9119 --no-open --insecure --skip-build`
-      to `--host 127.0.0.1 --port 9119 --no-open --skip-build` (drop `0.0.0.0` **and**
-      `--insecure`). `sudo systemctl daemon-reload && sudo systemctl restart hermes-dashboard`.
-      Re-test the URL (this is why `httpHostHeader: localhost` is in the tunnel config).
-- [ ] **Remove the now-useless ufw rules** for 9119:
-      `sudo ufw delete allow in on br-659914a9f61d to any port 9119`,
-      `sudo ufw delete allow from 172.18.0.0/16 to any port 9119`,
-      `sudo ufw delete deny 9119`.
-- [ ] **Remove the `hermes` and `openclaw` blocks from the Caddyfile** (Access+tunnel
-      replace Caddy basic_auth for these two) → `docker restart caddy`.
-- [ ] **openclaw:** if its gateway can bind loopback, point it at `127.0.0.1:18789`
-      and drop its ufw 18789 rules too. If it must stay `0.0.0.0`, leave its ufw
-      `deny 18789` rule in place.
-- [ ] **Verify it's actually private:** from your phone on cellular,
-      `https://hermes.chezgilles.ovh` → Access login (good); a direct hit of the raw IP
-      port should fail: `curl -m5 http://135.125.106.210:9119` → refused/timeout.
+- [x] **hermes:** `/etc/systemd/system/hermes-dashboard.service` now binds
+      `--host 127.0.0.1 --port 9119 --no-open --skip-build` (dropped `0.0.0.0` and
+      `--insecure`; the tunnel sets `httpHostHeader: localhost` to satisfy hermes'
+      Host-check).
+- [x] **openclaw:** ExecStart now includes `--bind loopback` (127.0.0.1:18789).
+- [x] **ufw rules** for 9119/18789 removed; **hermes + openclaw Caddy blocks**
+      removed (Access + tunnel replace Caddy basic_auth).
 
-## Phase 8 — Final verification
+### Docker iptables-bypass hardening (added after the original plan)
 
-- [ ] All other services load over HTTPS with valid certs.
-- [ ] Mail send + receive still works (second test).
-- [ ] hermes + openclaw require Cloudflare Access login, from any device, no client install.
+Docker publishes ports by writing its own iptables rules that **bypass UFW**, so
+anything mapped to `0.0.0.0` is internet-reachable by direct IP regardless of UFW.
+Rebound to `127.0.0.1` in the compose files (external access goes via Caddy):
+neo4j Bolt `7687`, portainer `9000/9443`, supabase kong `8000/8443`, supabase
+pooler `5432/6543`. Recreate (not just restart) so the new binding takes:
+`docker compose up -d portainer neo4j kong supavisor`.
+
+### finance origin lock + app login removal (added after the original plan)
+
+`finance.chezgilles.ovh` is the only **proxied** host, so port 443 stays
+internet-facing for the DNS-only services — meaning the origin is reachable by
+direct IP + Host header, which would **bypass Access**. Two-part fix:
+
+- [x] **Caddy origin lock:** the `finance.chezgilles.ovh` vhost rejects any
+      request whose `remote_ip` is not a Cloudflare edge range (→ `403`). Ranges
+      from `cloudflare.com/ips-v4` + `/ips-v6`; refresh if Cloudflare changes them.
+- [x] **Removed the finance app's own login** (it only hid the UI; the `/api/*`
+      data routes had no backend auth anyway). Access is now the sole gate;
+      assistant identity is scoped to the single username `user`
+      (`FINANCE_USERNAME` env). See the `Finance_dashboard` repo.
+
+Verify: `curl --resolve finance.chezgilles.ovh:443:135.125.106.210
+https://finance.chezgilles.ovh/api/dashboard` → **403**; the same URL through
+Cloudflare → **302** (Access).
+
+## Phase 8 — Final verification ✅
+
+- [x] All other services load over HTTPS with valid certs (Cloudflare DNS-01 wildcard).
+- [ ] Mail send + receive still works (second test) — **re-run after any DNS change.**
+- [x] hermes + openclaw + finance require Cloudflare Access login, any device, no client.
 
 ---
 
