@@ -15,6 +15,7 @@ docker-compose.override.yml
 n8n/fiches/
 neo4j-certs/
 ovh.env
+cloudflare.env
 Dockerfile_frontend_finance.old
 docker-compose.yml.backup
 docker-compose.yml.save

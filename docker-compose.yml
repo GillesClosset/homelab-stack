@@ -245,7 +245,7 @@ services:
       - NEO4J_dbms_security_procedures_unrestricted=apoc.*
       - NEO4J_dbms_security_procedures_allowlist=apoc.*
     ports:
-      - "7687:7687"  # Expose Bolt port
+      - "127.0.0.1:7687:7687"  # Expose Bolt port (loopback only — use Caddy for external access)
     expose:
       - 7474/tcp
     healthcheck:
@@ -303,9 +303,9 @@ services:
       - ./opencode-run:/run/opencode
       - caddy-data:/data:rw
       - caddy-config:/config:rw
-      - ./ovh.env:/etc/caddy/ovh.env:ro
+      - ./cloudflare.env:/etc/caddy/cloudflare.env:ro
     env_file:
-      -  ./ovh.env
+      - ./cloudflare.env
 #    networks:
 #      - caddy_net
     environment:
@@ -336,8 +336,8 @@ services:
     container_name: portainer
     restart: always
     ports:
-      - "9000:9000"
-      - "9443:9443"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9443:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
