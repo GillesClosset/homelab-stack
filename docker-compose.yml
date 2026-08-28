@@ -1,5 +1,9 @@
-include:
-  - ./supabase/docker/docker-compose.yml
+# Supabase stack retired 2026-08-11: finance_backend and n8n migrated to
+# the vanilla postgres+pgvector 'appdb' service below. See backups/ for the
+# pre-migration dumps. Re-enable this include to bring back kong/auth/storage/
+# realtime/studio/etc. if ever needed again.
+# include:
+#   - ./supabase/docker/docker-compose.yml
 
 volumes:
   n8n_storage:
@@ -24,12 +28,13 @@ volumes:
   neo4j-data:
   neo4j-plugins:
   searxng-config:
+  appdb-data:
 
 x-n8n: &service-n8n
   image: n8nio/n8n:2.13.4
   environment:
     - DB_TYPE=postgresdb
-    - DB_POSTGRESDB_HOST=supabase-db
+    - DB_POSTGRESDB_HOST=appdb
     - DB_POSTGRESDB_PORT=5432
     - DB_POSTGRESDB_USER=n8n_user
     - DB_POSTGRESDB_PASSWORD=WOuLSMXH#rXu4G
@@ -78,6 +83,23 @@ x-init-ollama: &init-ollama
     - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull qwen2.5:7b-instruct-q4_K_M; OLLAMA_HOST=ollama:11434 ollama pull nomic-embed-text"
 
 services:
+  appdb:
+    image: pgvector/pgvector:pg15
+    container_name: appdb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - appdb-data:/var/lib/postgresql/data
+      - ./scripts/appdb-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   flowise:
     image: flowiseai/flowise
     restart: unless-stopped
@@ -103,7 +125,7 @@ services:
       args:
         PYTHON_ENV: production
     environment:
-      - DATABASE_URL=postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/_supabase
+      - DATABASE_URL=postgresql://supabase_admin:${POSTGRES_PASSWORD}@appdb:5432/_supabase
       - SECRET_KEY=${FINANCE_SECRET_KEY}
       - APP_PASSWORD=${FINANCE_APP_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -128,10 +150,8 @@ services:
       - NEO4J_USERNAME=${NEO4J_USERNAME:-${NEO4J_USER:-neo4j}}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-#    depends_on:
-#      - db
     depends_on:
-      db:
+      appdb:
         condition: service_healthy
     volumes:
 #      - ./Finance_dashboard/backend:/app # optional, only if you want live code on server
@@ -181,7 +201,7 @@ services:
     depends_on:
       n8n-import:
         condition: service_completed_successfully
-      db:
+      appdb:
         condition: service_healthy
 
   # NEW: Task runner service

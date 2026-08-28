@@ -20,3 +20,4 @@ Dockerfile_frontend_finance.old
 docker-compose.yml.backup
 docker-compose.yml.save
 finance_schema.dump
+backups/*.dump
