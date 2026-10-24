@@ -153,6 +153,11 @@ services:
       # App-owned daily valuation: "1" writes units × price × FX into market
       # holdings; anything else only fetches prices (parallel run, Phase A).
       - FINANCE_REVALUE_HOLDINGS=${FINANCE_REVALUE_HOLDINGS:-0}
+      # Nightly Finary quantities import (23:15 job): off | check | apply.
+      # check stages and compares only; apply also writes holdings, behind guards.
+      - FINANCE_FINARY_SYNC=${FINANCE_FINARY_SYNC:-off}
+      # Comma-separated recipients of the jobs' alert mails; empty = log only.
+      - FINANCE_ALERT_TO=${FINANCE_ALERT_TO:-}
     depends_on:
       appdb:
         condition: service_healthy
