@@ -158,6 +158,9 @@ services:
       - FINANCE_FINARY_SYNC=${FINANCE_FINARY_SYNC:-off}
       # Comma-separated recipients of the jobs' alert mails; empty = log only.
       - FINANCE_ALERT_TO=${FINANCE_ALERT_TO:-}
+      # Password of the assistant's read-only PostgreSQL account (finance_assistant_ro,
+      # migration 031). Empty = the assistant's SQL tool stays off (fail-closed).
+      - FINANCE_ASSISTANT_DB_PASSWORD=${FINANCE_ASSISTANT_DB_PASSWORD:-}
     depends_on:
       appdb:
         condition: service_healthy
