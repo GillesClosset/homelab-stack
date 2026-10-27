@@ -161,6 +161,10 @@ services:
       # Password of the assistant's read-only PostgreSQL account (finance_assistant_ro,
       # migration 031). Empty = the assistant's SQL tool stays off (fail-closed).
       - FINANCE_ASSISTANT_DB_PASSWORD=${FINANCE_ASSISTANT_DB_PASSWORD:-}
+      # Finary sharing-link id read by ~/wealth_scraper/extract-http.js (Live
+      # update and the nightly sync). Kept in .env only, never in a file in git.
+      # Empty = the extractor refuses to run, so Live update and the nightly fail.
+      - FINARY_SHARING_LINK_ID=${FINARY_SHARING_LINK_ID:-}
     depends_on:
       appdb:
         condition: service_healthy
